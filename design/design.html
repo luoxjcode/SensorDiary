@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>传感器情绪日记 v11.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+        body { font-family: 'Noto Sans SC', sans-serif; background-color: #f1f5f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        
+        .phone { width: 393px; height: 852px; background: #1a1a1c; border-radius: 55px; padding: 11px; position: relative; border: 4px solid #333; box-shadow: 0 50px 100px -20px rgba(0,0,0,0.4); }
+        .screen { width: 100%; height: 100%; background: #fdfdfd; border-radius: 44px; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+        .dynamic-island { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 110px; height: 35px; background: black; border-radius: 20px; z-index: 100; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 呼吸灯 */
+        .pulse-active::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; background: rgba(79, 70, 229, 0.2); animation: pulse-anim 2s infinite; }
+        @keyframes pulse-anim { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(1.6); opacity: 0; } }
+
+        /* 状态颜色 */
+        .tab-active { color: #4f46e5; }
+        .tab-inactive { color: #cbd5e1; }
+    </style>
+</head>
+<body>
+
+<div class="phone">
+    <div class="dynamic-island"></div>
+    <div class="screen">
+        
+        <!-- 主内容滚动区 -->
+        <div id="main-scroller" class="flex-1 overflow-y-auto no-scrollbar pb-40">
+            
+            <!-- [视图] 首页：记录 -->
+            <div id="view-home" class="p-8 pt-16 animate-in fade-in duration-300">
+                <div class="mb-10 pl-4 border-l-4 border-indigo-600">
+                    <p id="date-label" class="text-slate-400 text-[10px] font-black uppercase tracking-widest">加载中...</p>
+                    <h1 class="text-2xl font-black text-slate-800 tracking-tighter">传感器监测</h1>
+                </div>
+
+                <!-- 环境监测图标卡片 (已修正图标) -->
+                <div class="grid grid-cols-2 gap-4 mb-10">
+                    <div class="bg-white p-6 rounded-[35px] shadow-sm border border-slate-50 flex flex-col items-center justify-center text-center">
+                        <div class="w-12 h-12 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-3">
+                            <i class="fa-solid fa-sun text-xl"></i> <!-- 标准免费图标 -->
+                        </div>
+                        <span class="text-lg font-black text-slate-800">520</span>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-1">光照指数</span>
+                    </div>
+                    <div class="bg-white p-6 rounded-[35px] shadow-sm border border-slate-50 flex flex-col items-center justify-center text-center">
+                        <div class="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mb-3">
+                            <i class="fa-solid fa-tower-broadcast text-xl"></i> <!-- 标准免费图标 -->
+                        </div>
+                        <span class="text-lg font-black text-slate-800">30</span>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-1">环境分贝</span>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center mb-6">
+                    <h4 class="text-[10px] font-black text-slate-300 uppercase tracking-widest">今日检测流</h4>
+                </div>
+                
+                <div id="log-container" class="space-y-4">
+                    <!-- 初始记录 -->
+                    <div class="bg-slate-50 p-5 rounded-[32px] flex items-center">
+                        <span class="text-2xl mr-4">😌</span>
+                        <div class="flex-1">
+                            <h4 class="text-xs font-bold text-slate-800">状态平和</h4>
+                            <p class="text-[9px] text-slate-400 mt-1">系统已自动校准生理基准</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- [视图] 分析页 -->
+            <div id="view-analysis" class="hidden p-8 pt-16 animate-in fade-in duration-300">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-2xl font-black text-slate-800">情绪分析</h2>
+                    <button onclick="openExportModal()" class="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg">
+                        <i class="fa-solid fa-arrow-up-right-from-square text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- 能量趋势图轴 -->
+                <div class="bg-white p-6 rounded-[40px] shadow-sm border border-slate-50 mb-8">
+                    <div class="flex items-center mb-6">
+                        <div class="w-2 h-4 bg-indigo-600 rounded-full mr-3"></div>
+                        <h3 class="text-sm font-black text-slate-800 uppercase tracking-tight">本周能量趋势图</h3>
+                    </div>
+                    <div class="h-44 w-full">
+                        <canvas id="energyLineChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 月度网格 -->
+                <div class="bg-white p-6 rounded-[40px] shadow-sm border border-slate-50 mb-8">
+                    <p class="text-[10px] font-black text-slate-300 uppercase mb-6 tracking-widest">十月每日记录概要</p>
+                    <div class="grid grid-cols-7 gap-y-6 text-center">
+                        <script>
+                            const emos = ['😊', '😌', '😐', '😔', '😴'];
+                            for(let i=1; i<=31; i++) {
+                                const e = emos[Math.floor(Math.random()*emos.length)];
+                                document.write(`<div class="flex flex-col items-center"><span class="text-[7px] text-slate-300 mb-1">${i}</span><span class="text-lg">${e}</span></div>`);
+                            }
+                        </script>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5s 动态检测层 -->
+        <div id="scan-layer" class="absolute inset-0 z-[200] hidden flex flex-col items-center justify-center text-white">
+            <div class="absolute inset-0 bg-slate-950/95 backdrop-blur-xl"></div>
+            <div class="relative z-10 text-center">
+                <div id="scan-count" class="text-9xl font-thin mb-4 tracking-tighter">5</div>
+                <p class="text-indigo-400 text-[10px] font-black tracking-[0.4em] uppercase">正在同步传感器数据</p>
+                <div class="flex justify-center space-x-2 mt-12 h-8">
+                    <div class="w-1 bg-white animate-pulse"></div>
+                    <div class="w-1 bg-indigo-500 animate-bounce"></div>
+                    <div class="w-1 bg-white/30 animate-pulse"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 确认对话框 -->
+        <div id="confirm-modal" class="absolute inset-0 z-[300] hidden flex items-center justify-center px-8">
+            <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+            <div class="relative bg-white w-full rounded-[45px] p-8 shadow-2xl text-center">
+                <div id="res-icon" class="text-7xl mb-6">😌</div>
+                <h3 id="res-label" class="text-xl font-black text-slate-800 mb-2">心情平和</h3>
+                <p class="text-[11px] text-slate-400 mb-8 leading-relaxed">基于当前环境光照与心率反馈，建议您尝试深呼吸以保持状态。</p>
+                <div class="flex space-x-4">
+                    <button onclick="handleResult(false)" class="flex-1 py-4 bg-slate-100 text-slate-400 font-black rounded-3xl">忽略</button>
+                    <button onclick="handleResult(true)" class="flex-1 py-4 bg-indigo-600 text-white font-black rounded-3xl active:scale-95 transition-transform">保存记录</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 分享卡片面板 -->
+        <div id="share-overlay" class="absolute inset-0 z-[400] hidden flex flex-col items-center justify-center bg-black/90 p-6">
+            <div id="poster-card" class="w-full bg-slate-50 rounded-[45px] overflow-hidden p-8 flex flex-col shadow-2xl mb-8">
+                <div class="flex justify-between items-start mb-8">
+                    <div>
+                        <p class="text-indigo-600 text-[8px] font-black tracking-widest uppercase mb-1">Weekly Insight</p>
+                        <h2 class="text-xl font-black text-slate-800">个人情绪周报</h2>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-[32px] p-6 mb-6">
+                    <p class="text-[9px] font-bold text-slate-200 uppercase mb-4 tracking-widest">本周活跃状态</p>
+                    <div id="poster-grid" class="grid grid-cols-7 gap-3"></div>
+                </div>
+
+                <div class="bg-slate-900 rounded-[30px] p-6 py-8 text-white text-[10px] leading-relaxed relative overflow-hidden">
+                    <i class="fa-solid fa-quote-left absolute top-2 left-4 opacity-10 text-4xl"></i>
+                    <p class="relative z-10 text-center italic">“你的心境就像一个传感器，只有在安静的时候才能接收到最细微的信号。”</p>
+                </div>
+                
+                <div class="mt-20 text-center">
+                    <p class="text-[8px] text-slate-300 font-bold uppercase tracking-[0.4em]">传感器情绪日历 专业版</p>
+                </div>
+            </div>
+
+            <div class="flex space-x-4 w-full px-4">
+                <button onclick="closeExport()" class="flex-1 py-4 bg-white/10 text-white font-bold rounded-3xl">返回</button>
+                <button onclick="saveImageToLocal()" class="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-3xl shadow-xl flex items-center justify-center">
+                    <i class="fa-solid fa-download mr-2"></i> 保存快照
+                </button>
+            </div>
+        </div>
+
+        <!-- 底部导航 (仅图标) -->
+        <div class="absolute bottom-0 w-full bg-white/90 backdrop-blur-2xl px-12 pt-4 pb-12 flex justify-between items-center z-50 border-t border-slate-100">
+            <!-- 首页图标 -->
+            <button onclick="switchView('home')" id="tab-home" class="tab-active transition-all">
+                <i class="fa-solid fa-house text-2xl"></i>
+            </button>
+
+            <!-- 持久检测按钮 (中心) -->
+            <div class="relative -mt-16">
+                <div id="pulse-ring" class="pulse-active absolute inset-0 rounded-full scale-110"></div>
+                <button id="trigger-btn" class="relative z-10 w-24 h-24 bg-slate-900 border-[6px] border-white rounded-full shadow-2xl flex flex-col items-center justify-center text-white touch-none active:scale-90 transition-transform">
+                    <i class="fa-solid fa-fingerprint text-4xl"></i>
+                </button>
+            </div>
+
+            <!-- 分析图标 -->
+            <button onclick="switchView('analysis')" id="tab-analysis" class="tab-inactive transition-all">
+                <i class="fa-solid fa-chart-simple text-2xl"></i>
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // 1. 设置中文日期
+    const d = new Date();
+    document.getElementById('date-label').innerText = d.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
+
+    // 2. 长按逻辑 (严格取消)
+    const btn = document.getElementById('trigger-btn');
+    const scan = document.getElementById('scan-layer');
+    const timerText = document.getElementById('scan-count');
+    const pulseRing = document.getElementById('pulse-ring');
+    const modal = document.getElementById('confirm-modal');
+
+    let count = 5;
+    let timerId = null;
+    let currentMood = null;
+
+    const moods = [
+        {e:'😊', t:'心情愉悦'}, {e:'😌', t:'平和冷静'}, {e:'😐', t:'情绪一般'}, {e:'😔', t:'感到压力'}
+    ];
+
+    function handleStart(e) {
+        e.preventDefault();
+        count = 5;
+        timerText.innerText = count;
+        scan.classList.remove('hidden');
+        pulseRing.classList.remove('pulse-active');
+
+        timerId = setInterval(() => {
+            count--;
+            timerText.innerText = count;
+            if (count <= 0) handleFinish();
+        }, 1000);
+    }
+
+    function handleCancel() {
+        if (count > 0) {
+            clearInterval(timerId);
+            scan.classList.add('hidden');
+            pulseRing.classList.add('pulse-active');
+        }
+    }
+
+    function handleFinish() {
+        clearInterval(timerId);
+        scan.classList.add('hidden');
+        currentMood = moods[Math.floor(Math.random() * moods.length)];
+        document.getElementById('res-icon').innerText = currentMood.e;
+        document.getElementById('res-label').innerText = currentMood.t;
+        modal.classList.remove('hidden');
+    }
+
+    btn.addEventListener('mousedown', handleStart);
+    btn.addEventListener('mouseup', handleCancel);
+    btn.addEventListener('mouseleave', handleCancel);
+    btn.addEventListener('touchstart', handleStart);
+    btn.addEventListener('touchend', handleCancel);
+
+    function handleResult(isSave) {
+        modal.classList.add('hidden');
+        pulseRing.classList.add('pulse-active');
+        if (isSave) {
+            const list = document.getElementById('log-container');
+            const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            const card = document.createElement('div');
+            card.className = "bg-white p-5 rounded-[32px] border border-slate-50 flex items-center shadow-sm animate-in zoom-in duration-300";
+            card.innerHTML = `
+                <span class="text-2xl mr-4">${currentMood.e}</span>
+                <div class="flex-1">
+                    <h4 class="text-xs font-bold text-slate-800">${currentMood.t}</h4>
+                    <p class="text-[9px] text-slate-400 mt-1">光信号采样成功 · 传感器数据已存入</p>
+                </div>
+                <span class="text-[10px] text-slate-300 font-mono italic">${timeStr}</span>
+            `;
+            list.prepend(card);
+        }
+    }
+
+    // 3. 导航逻辑 (图标颜色切换)
+    function switchView(tab) {
+        document.getElementById('view-home').classList.toggle('hidden', tab !== 'home');
+        document.getElementById('view-analysis').classList.toggle('hidden', tab !== 'analysis');
+        
+        const homeIcon = document.getElementById('tab-home');
+        const analysisIcon = document.getElementById('tab-analysis');
+        
+        if(tab === 'home') {
+            homeIcon.className = "tab-active transition-all";
+            analysisIcon.className = "tab-inactive transition-all";
+        } else {
+            homeIcon.className = "tab-inactive transition-all";
+            analysisIcon.className = "tab-active transition-all";
+            initEnergyChart();
+        }
+    }
+
+    // 4. 图表渲染
+    let chartInstance = null;
+    function initEnergyChart() {
+        if(chartInstance) return;
+        const ctx = document.getElementById('energyLineChart').getContext('2d');
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
+                datasets: [{ 
+                    data: [60, 45, 85, 50, 70, 95, 80], 
+                    borderColor: '#4f46e5', 
+                    borderWidth: 4, 
+                    tension: 0.4, 
+                    pointRadius: 0 
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { font: { size: 9, weight: 'bold' }, color: '#94a3b8' } },
+                    y: { display: false }
+                }
+            }
+        });
+    }
+
+    // 5. 分享与导出图片核心
+    function openExportModal() {
+        const grid = document.getElementById('poster-grid');
+        grid.innerHTML = '';
+        const emos = ['😊', '😌', '😑', '😔', '😴'];
+        for(let i=0; i<28; i++) {
+            const s = document.createElement('span');
+            s.className = "text-center text-lg";
+            s.innerText = emos[Math.floor(Math.random()*emos.length)];
+            grid.appendChild(s);
+        }
+        document.getElementById('share-overlay').classList.remove('hidden');
+    }
+
+    function closeExport() {
+        document.getElementById('share-overlay').classList.add('hidden');
+    }
+
+    function saveImageToLocal() {
+        const poster = document.getElementById('poster-card');
+        html2canvas(poster, { scale: 3, backgroundColor: '#f8fafc', borderRadius: 45 }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = `分析报表-${Date.now()}.png`;
+            link.href = canvas.toDataURL("image/png");
+            link.click();
+            alert("✅ 后台已生成高分辨率 PNG 截图，并开始下载。");
+            closeExport();
+        });
+    }
+</script>
+
+</body>
+</html>
