@@ -46,7 +46,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     // App Share Link
-    private val appShareLink = "https://example.com/sensordiary"
+    private val appShareLink = "https://share.feijipan.com/s/7n3kQLEg"
 
     // UI Navigation State
     var currentTab by mutableStateOf("home")
